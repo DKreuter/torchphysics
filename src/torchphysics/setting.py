@@ -50,6 +50,12 @@ class Setting(Problem, DataModule):
     parameters : list or dict of Parameter objects
         Parameters can be part of conditions and still be learned together with the
         solution during training.
+    solution_dims : dict
+        A dictionary containing the dimensionality of the output functions.
+        E.g. if we want to solve a Navier-Stokes-eq. and find the velocity 'v' and
+        pressure 'p': 
+        In 2D: solution_dims = {'v': 2, 'p': 1}
+        In 3D: solution_dims = {'v': 3, 'p': 1}
     n_iterations : int
         Number of iterations per epoch.
     """
@@ -240,6 +246,21 @@ class Setting(Problem, DataModule):
     def variable_dims(self):
         return {k: v.get_dim() for k, v in self.variables.items()}
 
+    @property
+    def normalization_dict(self):
+        out = {}
+        for k in self.variables:
+            var = self.variables[k]
+            width = []
+            center = []
+            bounds = var.domain._compute_bounds()
+            for i in range(var.domain.dim):
+                min_, max_ = bounds[2*i], bounds[2*i+1]
+                width.append(max_-min_)
+                center.append((max_+min_)/2)
+            out[k] = (width, center)
+        return out
+
     def serialize(self):
         dct = {}
         dct['name'] = 'Setting'
@@ -260,4 +281,5 @@ class Setting(Problem, DataModule):
         for p_name in self.parameters:
             p_dict[p_name] = list(self.parameters[p_name].shape)
         dct['parameters'] = p_dict
+        dct['solution_dims'] = self.solution_dims
         return dct

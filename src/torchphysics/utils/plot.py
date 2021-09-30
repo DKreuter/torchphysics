@@ -16,6 +16,8 @@ class Plotter():
 
     Parameters
     ----------
+    solution_name : str
+        The output function of the network that should be animated.
     plot_variables : Variabale or list of Variables.
         #TODO: what happens if dim(var) >= 3?
         The main variable(s) over which the solution should be plotted.
@@ -48,7 +50,7 @@ class Plotter():
         will try to use a fitting way, to show the data. Implemented types are:
             - 'line' for plots in 1D
             - 'surface_2D' for surface plots, with a 2D-domain
-            - 'curve' for a curve in 3D, with a 2D-domain, 
+            - 'curve' for a curve in 3D, with a 1D-domain, 
             - 'quiver_2D' for quiver/vector field plots, with a 2D-domain
             - 'contour_surface' for contour/colormaps, with a 2D-domain
     '''
@@ -85,6 +87,8 @@ def _plot(model, solution_name, plot_variables, points, angle=[30, 30],
     ----------
     model : DiffEqModel
         A neural network of which the output should be plotted
+    solution_name : str
+        The output function of the network that should be animated.
     plot_variables : Variabale or list of Variables.
         The main variable(s) over which the solution should be plotted.
     points : int
@@ -117,7 +121,7 @@ def _plot(model, solution_name, plot_variables, points, angle=[30, 30],
         will try to use a fitting way, to show the data. Implemented types are:
             - 'line' for plots in 1D
             - 'surface_2D' for surface plots, with a 2D-domain
-            - 'curve' for a curve in 3D, with a 2D-domain, 
+            - 'curve' for a curve in 3D, with a 1D-domain, 
             - 'quiver_2D' for quiver/vector field plots, with a 2D-domain
             - 'contour_surface' for contour/colormaps, with a 2D-domain
 
@@ -136,7 +140,7 @@ def _plot(model, solution_name, plot_variables, points, angle=[30, 30],
                   'curve': curve3D, 'quiver_2D': quiver2D,
                   'contour_surface': contour_2D}
     plot_fun = plot_types.get(plot_type)
-    # If no (or wrong) type is given, find the correct type:
+    # If no (or wrong) type is given, try to find the correct type:
     if plot_fun is None:
         if len(plot_output_entries) == 1:
             plot_fun = _plot_for_one_output(plot_variables)
@@ -167,7 +171,7 @@ def _plot_for_one_output(plot_variables):
         return line_plot
     # surface plots for two different variables:
     elif (len(plot_variables) == 2 and
-          plot_variables[0].domain.dim + plot_variables[0].domain.dim == 2):
+          plot_variables[0].domain.dim + plot_variables[1].domain.dim == 2):
         return surface2D_2_variables
     else:
         raise NotImplementedError("""Can't plot 1D-output on given domain""")
@@ -207,6 +211,7 @@ def line_plot(model, solution_name, plot_variables, points, angle,
                                                     all_variables, device,
                                                     plot_variable)
     output = _evaluate_model(model, solution_name, plot_output_entry, input_dic)
+    output = _take_norm_of_output(plot_output_entry, output)
     # Create the plot
     fig = plt.figure()
     ax = fig.add_subplot()
@@ -331,9 +336,6 @@ def quiver2D(model, solution_name, plot_variables, points, angle,
         info_string = _create_info_text(dic_for_other_variables)
         ax.text(1.25, 0.5, info_string, bbox={'facecolor': 'w', 'pad': 5},
                 transform=ax.transAxes)
-
-    ax.set_xlabel(plot_variable.name + '_1')
-    ax.set_ylabel(plot_variable.name + '_2')
     #plt.show()
     return fig
 
@@ -350,9 +352,7 @@ def contour_2D(model, solution_name, plot_variables, points, angle,
                                                     plot_variable)
 
     output = _evaluate_model(model, solution_name, plot_output_entry, input_dic)
-    if len(plot_output_entry) > 1:
-        # if we have many outputs take the norm
-        output = np.linalg.norm(output, axis=1)
+    output = _take_norm_of_output(plot_output_entry, output)
     # Create the plot
     fig = plt.figure()
     ax = fig.add_subplot()
@@ -393,12 +393,12 @@ def _create_domain(plot_variable, points, device):
 
 def _create_input_dic(input_dic, points, dic_for_other_variables, all_variables,
                       device):
-    '''Creates the input dictonary for the model
+    '''Creates the input dictionary for the model
 
     Parameters
     ----------
     input_dic : dic
-        The dictonary that already contains the data for the plot variable
+        The dictionary that already contains the data for the plot variable
     dic_for_other_variables : dic
         The data for all other variables
     all_variables : dic or list
@@ -441,8 +441,15 @@ def _order_input_dic(input_dic, all_variables):
 
 def _evaluate_model(model, solution_name, plot_output_entry, input_dic):
     # Evaluate the model
-    output = model.forward(input_dic)[solution_name]
+    output = model(input_dic)[solution_name]
     output = output.data.cpu().numpy()[:, plot_output_entry]
+    return output
+
+
+def _take_norm_of_output(plot_output_entry, output, axis=1):
+    if len(plot_output_entry) > 1:
+        # if we have many outputs take the norm
+        output = np.linalg.norm(output, axis=axis)
     return output
 
 

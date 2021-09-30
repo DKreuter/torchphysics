@@ -4,9 +4,7 @@ neural networks
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 from matplotlib import animation as anim
-import matplotlib.patches as patches
 import numpy as np
-from numpy.core.fromnumeric import shape
 import torch
 from . import plot 
 from ..problem.domain.domain1D import Interval
@@ -30,16 +28,17 @@ def animation(model, solution_name, plot_variable, domain_points,
     domain_points : int 
         The number of points that should be used for the domain discretization.
     animation_variable : Variable
-        The varaiable over which the animation has to be created. Needs to 
+        The variable over which the animation has to be created. Needs to 
         have an Interval as a domain.
     frame_number : int
-        Number of frames
+        Number of frames, of the animation. Will be sampled equidistant in the 
+        domain of the animation_variable.
     device : str or torch device
         The device of the model.
-    ani_speed : Number
-        Speed of the animation
+    ani_speed : Number, optional
+        Speed of the animation.
     angle : list, optional
-        The view angle for surface plots. Standart angle is [30, 30]
+        The view angle for 3D plots. Standart angle is [30, 30]
     dic_for_other_variables : dict, optional
         A dictionary containing values for all the other variables of the 
         model. E.g. {'D' : [1,2], ...}
@@ -64,7 +63,7 @@ def animation(model, solution_name, plot_variable, domain_points,
         will try to use a fitting way, to show the data. Implemented types are:
             - 'line' for line animations, with a 1D-domain and output
             - 'surface_2D' for surface animation, with a 2D-domain
-            - 'curve' for a curve in 3D, with a 2D-domain, 
+            - 'curve' for a curve in 3D, with a 1D-domain, 
             - 'quiver_2D' for quiver/vector field animation, with a 2D-domain
             - 'contour_surface' for contour/colormaps, with a 2D-domain
 
@@ -135,6 +134,7 @@ def animation_line(model, solution_name, plot_variable, points,
     # evaluate the model and get max and min values over all points
     outputs = _evaluate_model(model, solution_name, points, animation_points, 
                               animation_variable.name, input_dic, plot_output_entry)
+    outputs = plot._take_norm_of_output(plot_output_entry, outputs, axis=-1)
     output_max, output_min = _get_max_min(outputs)
     # construct the figure handle and axis for the animation
     fig = plt.figure()
@@ -145,10 +145,8 @@ def animation_line(model, solution_name, plot_variable, points,
     line, = ax.plot([], [], lw=2)
     text_box = ax.text(0.05,0.95, '', bbox={'facecolor': 'w', 'pad': 5}, 
                        transform=ax.transAxes, va='top', ha='left')   
+    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
-
     def animate(frame_number, outputs, line):
         line.set_data(domain_points.flatten(), outputs[:, frame_number, 0])
         dic_for_other_variables[animation_variable.name] = \
@@ -191,9 +189,8 @@ def animation_surface2D(model, solution_name, plot_variable, points,
                             vmax=output_max, antialiased=False)]
     plt.colorbar(surf[0], shrink=0.5, aspect=10, pad=0.1) 
 
+    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
     def animate(frame_number, outputs, surf):
         surf[0].remove() # remove old surface
         surf[0] = ax.plot_trisurf(triangulation, outputs[:, frame_number, 0],
@@ -253,9 +250,8 @@ def animation_curve_3D(model, solution_name, plot_variable, points,
     ax.plot(animation_points, np.zeros_like(animation_points),
             np.zeros_like(animation_points), color='black')
 
+    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
     info_string = plot._create_info_text(dic_for_other_variables)  
     ax.text2D(1.1, 0, info_string, bbox={'facecolor':'w', 'pad':5}, 
               transform=ax.transAxes, va='top', ha='left') 
@@ -299,17 +295,17 @@ def animation_quiver_2D(model, solution_name, plot_variable, points,
     text_box = ax.text(1.25, 0.5, '', bbox={'facecolor': 'w', 'pad': 5},
                        transform=ax.transAxes)
     plot._outline_domain(plot_variable, ax)
+    # helper quiver plot to get a fixed colorbar and a constant scaling
     quiver = ax.quiver(domain_points[:, 0], domain_points[:, 1], 
                        outputs[:, j, 0], outputs[:, j, 1],
                        color=cm.jet(norm(color[:, 0])),
                        scale=None, angles='xy',
                        units='xy', zorder=10)
     sm = cm.ScalarMappable(cmap=cm.jet, norm=norm)
-    quiver._init()
+    quiver._init() # to fix the arrow scale
     plt.colorbar(sm)
+    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
     def animate(frame_number, outputs, quiver):
         # set new coords. of arrow head and color
         quiver.set_UVC(outputs[:, frame_number, 0], outputs[:, frame_number, 1])
@@ -327,9 +323,10 @@ def animation_quiver_2D(model, solution_name, plot_variable, points,
     return fig, ani
 
 
-def animation_contour_2D(model, solution_name, plot_variable, points, animation_variable,
-                        frame_number, device, ani_speed, angle,
-                        dic_for_other_variables, all_variables, plot_output_entry):
+def animation_contour_2D(model, solution_name, plot_variable, points,
+                         animation_variable, frame_number, device,
+                         ani_speed, angle, dic_for_other_variables,
+                         all_variables, plot_output_entry):
     '''Handles colormap animations in 2D
     '''
     # create the input dic for the model
@@ -340,9 +337,7 @@ def animation_contour_2D(model, solution_name, plot_variable, points, animation_
     # evaluate the model and get max and min values over all points
     outputs = _evaluate_model(model, solution_name, points, animation_points, 
                               animation_variable.name, input_dic, plot_output_entry)
-    if len(plot_output_entry) > 1:
-        # if we have many outputs take the norm
-        outputs = np.linalg.norm(outputs, axis=-1)
+    outputs = plot._take_norm_of_output(plot_output_entry, outputs, axis=-1)
     output_max, output_min = _get_max_min(outputs)
     # Create the plot
     fig = plt.figure()
@@ -361,10 +356,8 @@ def animation_contour_2D(model, solution_name, plot_variable, points, animation_
                       vmin=output_min, vmax=output_max, cmap=cm.jet)]
     plt.colorbar(con[0])
     con[0].remove()
+    dic_for_other_variables = _check_dic_is_none(dic_for_other_variables)
     # create the animation
-    if dic_for_other_variables is None:
-        dic_for_other_variables = {}
-
     def animate(frame_number, outputs, con):
         # remove old contour
         if frame_number >= 1:
@@ -401,14 +394,20 @@ def _create_input_for_animation(plot_variable, points, animation_variable,
     return points, domain_points, input_dic, animation_points
 
 
+def _check_dic_is_none(dic_for_other_variables):
+    if dic_for_other_variables is None:
+        dic_for_other_variables = {}
+    return dic_for_other_variables
+
+
 def _get_max_min(points):
     '''Returns the max and min value over all points. Needed to get a fixed y-(or z)axis.
     '''
     return np.amax(points), np.amin(points)
 
 
-def _evaluate_model(model, solution_name, points, animation_points, animation_name, input_dic,
-                    plot_output_entry):
+def _evaluate_model(model, solution_name, points, animation_points, animation_name,
+                    input_dic, plot_output_entry):
     '''Evaluates the model at all domain and animation points
 
     Parameters
@@ -430,6 +429,6 @@ def _evaluate_model(model, solution_name, points, animation_points, animation_na
     for i in range(len(animation_points)):
         # only need to change the animation varibale
         input_dic[animation_name] = animation_points[i][0]*torch.ones((points, 1))
-        out = model.forward(input_dic)[solution_name]
+        out = model(input_dic)[solution_name]
         outputs[:,i,:] = out.data.cpu().numpy()[:, plot_output_entry]
     return outputs
