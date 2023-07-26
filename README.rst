@@ -2,6 +2,9 @@
 TorchPhysics
 ==============
 
+.. image:: https://mybinder.org/badge_logo.svg
+ :target: https://mybinder.org/v2/gh/boschresearch/torchphysics/main?urlpath=https%3A%2F%2Fgithub.com%2Fboschresearch%2Ftorchphysics%2Fblob%2Fmain%2Fexamples%2Ftutorial%2FIntroduction_Tutorial_PINNs.ipynb
+
 TorchPhysics is a Python library of (mesh-free) deep learning methods to solve differential equations.
 You can use TorchPhysics e.g. to
 
