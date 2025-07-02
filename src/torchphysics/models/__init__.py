@@ -23,3 +23,4 @@ from .deeponet.deeponet import DeepONet
 from .deeponet.branchnets import (BranchNet, FCBranchNet, ConvBranchNet1D)
 from .deeponet.trunknets import (TrunkNet, FCTrunkNet) 
 from .deeponet.layers import TrunkLinear
+from .deeponet_v2.deeponet_v2 import DeepONetV2, BranchNetV2, TrunkNetV2
